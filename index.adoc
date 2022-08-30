@@ -1,1 +1,115 @@
-= Add your document here
+= Build and run AutoSD based AMI for SOAFEE
+:source-highlighter: rouge
+:toc: auto
+
+== Prerequisites
+=== S3 Bucket
+In order to import the image as an AMI, it must first be uploaded to an S3 Bucket. So, make sure to create one in your AWS region.
+
+=== Build Environment
+To avoid cross architecture image creation, we will build the image on a CentOS Stream 9 aarch64 EC2 instance on AWS
+
+==== Running the EC2 instance
+Find the CentOS Stream 9 AMI for your region and launch an EC2 instance from it
+
+* Navigate to https://www.centos.org/download/aws-images/[AWS Images] and search for the AMI by searching `"CentOS Stream 9" aarch64`.
+* Find the image for your region and click `Deploy Link`
+** If you are not already logged in to your AWS account, now is the time
+* Complete the instance launching flow
+** Give your instance a name
+** Choose the instance type. The recommended one is `c6g.4xlarge`
+** Set (or create) your `Key Pair`, so you can SSH to the instance
+** Set (or create) the `Security Group` that allows SSH access to the machine from your IP
+** Set the Root Volume's Storage size to 100 Gib
+** In `Advanced Details`, set (or create) the `IAM instance profile` with the `VMImporter` Policy
+** Click `Launch instance`
+
+==== SSH to your machine
+
+[source, shell]
+----
+ssh -i <Private key of the SSH Key Pair> ec2-user@<EC2 external FQDN>
+----
+
+==== Install required packages
+
+* Enable the osbuild repo:
+
+[source,shell]
+----
+sudo dnf -y copr enable @osbuild/osbuild
+----
+
+* Install osbuild and related packages:
+
+[source,shell]
+----
+sudo dnf -y install osbuild osbuild-tools osbuild-ostree
+----
+
+* Install additional packages
+
+[source,shell]
+----
+sudo dnf -y install git make unzip jq
+----
+
+
+* Install the AWS CLI
+
+[source,shell]
+----
+curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+----
+
+== Building the AMI
+
+* Clone the `sample-images` repository
+
+[source,shell]
+----
+git clone https://gitlab.com/CentOS/automotive/sample-images.git
+cd sample-images/osbuild-manifests
+----
+
+* Build the Image
+
+[source,shell]
+----
+make cs9-aws-soafee-regular.aarch64.img
+----
+
+* Upload the image and export it into an AMI
+
+[source,shell]
+----
+./tools/export-image-aws.sh cs9-aws-soafee-regular.aarch64.img <S3 Bucket Name> <AMI Size in GB>
+----
+
+== Using the SOAFEE image
+
+=== Run an EC2 instace from the newly built AMI
+* Locate the AMI you created in the previous step in your AWS console (its name is `cs9-aws-soafee-regular.aarch64`)
+* Click `Launch instance from AMI`
+* Complete the instance launching flow
+** Give your instance a name
+** Choose the instance type. The recommended one is `c6g.large`
+** Set (or create) your `Key Pair`, so you can SSH to the instance
+** Set (or create) the `Security Group` that allows SSH access to the machine from your IP
+** Click `Launch instance`
+
+=== SSH to the instace
+
+[source, shell]
+----
+ssh -i <Private key of the SSH Key Pair> ec2-user@<EC2 external FQDN>
+----
+
+=== Execute Podman "Hello World"
+
+[source, shell]
+----
+podman run --rm quay.io/podman/hello:latest
+----
